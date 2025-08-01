@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Prompt Form</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+
+        .prompt-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+        }
+
+        .prompt-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 25px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .output-box {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            background-color: #f8f9fa;
+            min-height: 150px;
+            resize: vertical;
+            font-family: inherit;
+            color: #333;
+        }
+
+        .output-box:empty::before {
+            content: "Output will appear here...";
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-style: italic;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Text Prompt Form</h1>
+        
+        <form id="promptForm">
+            <div class="form-group">
+                <label for="promptInput">Enter your prompt:</label>
+                <textarea 
+                    id="promptInput" 
+                    class="prompt-input" 
+                    placeholder="Type your prompt here..."
+                    required
+                ></textarea>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">
+                Submit
+            </button>
+            
+            <div class="loading" id="loading">
+                Processing...
+            </div>
+        </form>
+        
+        <div class="form-group">
+            <label for="outputBox">Output:</label>
+            <textarea 
+                id="outputBox" 
+                class="output-box" 
+                readonly
+                placeholder="Output will appear here..."
+            ></textarea>
+        </div>
+    </div>
+
+    <script src="js_fastapi/llm_stream_post.js"></script>
+    <script>
+        
+        // Update 2.
+        // We added data processing to handle the streaming data.
+        // Function to process streaming data and extract content after 'data:'
+        function processStreamData(rawData) {
+            // Split the data by lines to handle multiple data chunks
+            const lines = rawData.split('\n');
+            let processedContent = '';
+            
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine.startsWith('data:')) {   
+                    continue;
+                }
+
+                // Extract content after 'data:'
+                const content = trimmedLine.substring(5).trim();
+                if (content) {
+                    processedContent += content;
+                }
+            }
+            
+            return processedContent;
+        }
+
+        // Update 1.
+        // Local handle_stream function similar to llm_stream_post.js
+        async function handle_stream(prompt) {
+            const apiUrl = 'http://localhost:4000/stream-with-post';
+            const requestBody = {
+                question: prompt
+            };
+
+            let fullResponse = '';
+            
+            for await (const data of streamIterator(apiUrl, requestBody, {})) {
+                // Process the streaming data to extract content after 'data:'
+                fullResponse += processStreamData(data);
+            }
+            
+            return fullResponse;
+        }
+
+        document.getElementById('promptForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const promptInput = document.getElementById('promptInput');
+            const outputBox = document.getElementById('outputBox');
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            
+            const prompt = promptInput.value.trim();
+            
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            loading.style.display = 'block';
+            outputBox.value = '';
+            
+            try {
+                // Call the handle_stream function
+                const result = await handle_stream(prompt);
+                outputBox.value = result;
+                
+                // Auto-scroll to bottom
+                outputBox.scrollTop = outputBox.scrollHeight;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                outputBox.value = `Error: ${error.message}\n\nPlease make sure the FastAPI server is running on localhost:4000`;
+            } finally {
+                // Reset form state
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit';
+                loading.style.display = 'none';
+            }
+        });
+        
+        // Auto-resize textareas
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+        
+        document.getElementById('promptInput').addEventListener('input', function() {
+            autoResize(this);
+        });
+    </script>
+</body>
+</html>
