@@ -62,7 +62,17 @@
                 // Extract content after 'data:'
                 const content = trimmedLine.substring(5).trim();
                 if (content) {
-                    processedContent += content;
+                    try {
+                        // Parse the JSON content to extract the 'data' field
+                        const parsedContent = JSON.parse(content);
+                        if (parsedContent.data) {
+                            processedContent += parsedContent.data;
+                        }
+                    } catch (e) {
+                        // If parsing fails, use the raw content as fallback
+                        console.warn('Failed to parse JSON content:', content);
+                        processedContent += content;
+                    }
                 }
             }
             
@@ -119,7 +129,6 @@
             try {
                 // Call the handle_stream function
                 const result = await handle_stream(prompt);
-                // Note: outputBox is already updated in real-time during streaming
                 
             } catch (error) {
                 console.error('Error:', error);
