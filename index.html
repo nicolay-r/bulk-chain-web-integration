@@ -78,10 +78,18 @@
             };
 
             let fullResponse = '';
+            const outputBox = document.getElementById('outputBox');
             
             for await (const data of streamIterator(apiUrl, requestBody, {})) {
                 // Process the streaming data to extract content after 'data:'
-                fullResponse += processStreamData(data);
+                const newContent = processStreamData(data);
+                if (newContent) {
+                    fullResponse += newContent;
+                    // Update the output box immediately with each new chunk
+                    outputBox.value = fullResponse;
+                    // Auto-scroll to bottom to show the latest content
+                    outputBox.scrollTop = outputBox.scrollHeight;
+                }
             }
             
             return fullResponse;
@@ -111,10 +119,7 @@
             try {
                 // Call the handle_stream function
                 const result = await handle_stream(prompt);
-                outputBox.value = result;
-                
-                // Auto-scroll to bottom
-                outputBox.scrollTop = outputBox.scrollHeight;
+                // Note: outputBox is already updated in real-time during streaming
                 
             } catch (error) {
                 console.error('Error:', error);
