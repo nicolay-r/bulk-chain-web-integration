@@ -1,2 +1,2 @@
 #!/bin/bash
-uvicorn llm_stream:app --port 4000
+uvicorn stream_data:app --port 4000
