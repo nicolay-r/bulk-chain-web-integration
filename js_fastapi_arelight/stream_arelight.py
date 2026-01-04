@@ -1,4 +1,4 @@
-import asyncio
+import nest_asyncio
 from os.path import join
 
 import orjson
@@ -15,6 +15,7 @@ from arelight.run.utils import merge_dictionaries
 from arelight.pipelines.result import PipelineResult
 
 
+nest_asyncio.apply()
 app = FastAPI()
 
 app.add_middleware(
@@ -63,7 +64,7 @@ async def stream_answer(text):
         predict_table_name=predict_table_name,
         collection_target_func=collection_target_func,
         translator_args={
-            #"model": translate_model() if translate_model is not None else None,
+            "model": translate_model() if translate_model is not None else None,
             "src": "auto",
             "dest": "en"
         },
