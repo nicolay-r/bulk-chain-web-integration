@@ -1,0 +1,1 @@
+arelight @ git+https://github.com/nicolay-r/arelight@v0.26.0
