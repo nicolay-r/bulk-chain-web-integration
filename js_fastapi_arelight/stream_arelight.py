@@ -1,4 +1,5 @@
-from os.path import dirname, basename, join
+import asyncio
+from os.path import join
 
 import orjson
 from bulk_chain.core.utils import dynamic_init
@@ -12,7 +13,6 @@ from arelight.api import create_inference_pipeline
 from arelight.pipelines.demo.labels.formatter import CustomLabelsFormatter
 from arelight.run.utils import merge_dictionaries
 from arelight.pipelines.result import PipelineResult
-from arelight.run.infer import create_infer_parser
 
 
 app = FastAPI()
@@ -38,55 +38,43 @@ async def stream_answer(text):
             return -1 
         return 0
 
-    def setup_collection_name(value):
-        # Considering Predefined name if the latter has been declared.
-        if value is not None:
-            return value
-        # Use the name of the file.
-        if args.from_files is not None:
-            return basename(args.from_files[0]) if len(args.from_files) == 1 else "from-many-files"
-        if args.from_dataframe is not None:
-            return basename(args.from_dataframe[0])
-
-        return "samples"
-
-    parser = create_infer_parser()
-
-    # Parsing arguments.
-    args = parser.parse_args()
-
     # Other parameters.
     predict_table_name = "bulk_chain"
-    collection_name = setup_collection_name(value=args.collection_name)
-    output_dir = dirname(args.output_template) if dirname(args.output_template) != "" else args.output_template
+    collection_name = "test_samples"
+    output_dir = "./"
     collection_target_func = lambda data_type: join(output_dir, "-".join([collection_name, data_type.name.lower()]))
 
     # Init NER model.
-    ner_model_type = dynamic_init(class_filepath=args.ner_provider)
+    ner_model_type = dynamic_init(class_filepath="providers/dp_130.py")
 
     # Init Translator model.
-    translate_model = dynamic_init(class_filepath=args.translate_provider) \
-        if args.translate_provider is not None else None
+    translate_model = dynamic_init(class_filepath="providers/googletrans_402.py")
 
     # Stream output from logging.
     pipeline, settings = create_inference_pipeline(
-        args=args,
+        sampling_args={
+            "sentence_parser": "nltk:english",
+            "terms_per_context": 50,
+            "docs_limit": 1, 
+            "csv_sep": ',',
+            "csv_column": "text",
+        },
         files_iter=["input.txt"],
         predict_table_name=predict_table_name,
         collection_target_func=collection_target_func,
         translator_args={
-            "model": translate_model() if translate_model is not None else None,
-            "src": args.translate_text.split(':')[0] if args.translate_text is not None else None,
-            "dest": args.translate_text.split(':')[1] if args.translate_text is not None else None,
+            #"model": translate_model() if translate_model is not None else None,
+            "src": "auto",
+            "dest": "en"
         },
         ner_args={
-            "model": ner_model_type(model=args.ner_model_name),
-            "obj_filter": None if args.ner_types is None else lambda s_obj: s_obj.ObjectType in args.ner_types,
+            "model": ner_model_type(model="ner_ontonotes_bert_mult"),
+            "obj_filter": lambda s_obj: s_obj.ObjectType in ["ORG", "PERSON", "LOC", "GPE"],
             "chunk_limit": 128
         },
         inference_args={
             "model": "meta/meta-llama-3-70b-instruct",
-            "class_name": "replicate_104.py",
+            "class_name": "providers/replicate_104.py",
             "api_key": "API-KEY",
             "task_kwargs": {
                 "schema": [{
@@ -98,19 +86,21 @@ async def stream_answer(text):
                     "out": "response"
                 }],
                 "classify_func": lambda row: class_to_int(row['response']),
+                'labels_fmt': "u:0,p:1,n:2"
             }
-        }
+        },
+        batch_size=1,
     )
 
     # TODO. This is temporary for supporting legacy backend settings.
-    if args.backend == "d3js_graphs":
-        labels_fmt = {a: v for a, v in map(lambda item: item.split(":"), args.d3js_label_names.split(','))}
-        settings.append({
-            "labels_formatter": CustomLabelsFormatter(**labels_fmt),
-            "d3js_collection_name": collection_name,
-            "d3js_collection_description": collection_name,
-            "d3js_graph_output_dir": output_dir
-        })
+    d3js_label_names = "p:pos,n:neg,u:neu"
+    labels_fmt = {a: v for a, v in map(lambda item: item.split(":"), d3js_label_names.split(','))}
+    settings.append({
+        "labels_formatter": CustomLabelsFormatter(**labels_fmt),
+        "d3js_collection_name": collection_name,
+        "d3js_collection_description": collection_name,
+        "d3js_graph_output_dir": output_dir
+    })
 
     # Launch application.
     BasePipelineLauncher.run(
