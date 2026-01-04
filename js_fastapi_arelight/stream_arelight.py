@@ -42,7 +42,7 @@ async def stream_answer(text):
     # Other parameters.
     predict_table_name = "bulk_chain"
     collection_name = "test_samples"
-    output_dir = "./"
+    output_dir = "./output"
     collection_target_func = lambda data_type: join(output_dir, "-".join([collection_name, data_type.name.lower()]))
 
     # Init NER model.
